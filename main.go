@@ -13,10 +13,11 @@ import (
 	"time"
 )
 
-var RequestLimit = limit.NewRequestLimitService(10*time.Second, 100)
+var RequestLimit = limit.NewRequestLimitService(10*time.Second, 100, func(r *http.Request) string {
+	return r.RemoteAddr
+})
 
-type HttpHandler struct {
-}
+type HttpHandler struct{}
 
 type Urls struct {
 	Urls string
@@ -74,7 +75,7 @@ func main() {
 	// Define a serveMux to handle routes.
 	mux := http.NewServeMux()
 	httpHandler := &HttpHandler{}
-	mux.Handle("/urls", Middleware(httpHandler))
+	mux.Handle("/urls", RequestLimit.Limit(httpHandler.ServeHTTP))
 
 	log.Println("Listening...")
 
@@ -166,17 +167,4 @@ func createHashStr(urlsArr []string) (string, error) {
 	}
 
 	return hashStr, nil
-}
-
-func Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if RequestLimit.IsAvailable() {
-			RequestLimit.Increase()
-			log.Println(RequestLimit.ReqCount)
-			next.ServeHTTP(w, r)
-		} else {
-			http.Error(w, "too many requests", http.StatusTooManyRequests)
-			return
-		}
-	})
 }
